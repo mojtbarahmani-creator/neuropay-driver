@@ -18,24 +18,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Accept Android Licenses
-        run: |
-          yes | sdkmanager --licenses || true
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.9'
+          cache-disabled: true
 
-      - name: Locate Project & Build APK
+      - name: Find Project and Build
         run: |
-          # اگر فایل تنظیمات در زیرپوشه باشد، وارد آن پوشه می‌شود
-          if [ ! -f "settings.gradle.kts" ] && [ -d "NeuroPayDriver" ]; then
-            cd NeuroPayDriver
+          echo "=== ساختار فایل‌های شما در گیت‌هاب ==="
+          pwd
+          ls -la
+          find . -maxdepth 3 -not -path '*/.*'
+          
+          # پیدا کردن محل واقعی فایلی به نام settings.gradle.kts یا پوشه app
+          PROJECT_DIR=$(find . -name "settings.gradle.kts" -not -path "*/.*" -exec dirname {} \; | head -n 1)
+          
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "خطا: فایل settings.gradle.kts پیدا نشد!"
+            exit 1
           fi
           
-          # نصب گریدل ۸.۹ و ساخت اتوماتیک APK
-          gradle wrapper --gradle-version 8.9
-          chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
+          echo "پروژه در این مسیر پیدا شد: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
+          
+          # اگر پوشه app داخل اینجا نبود، بررسی کن آیا app جای دیگریست
+          if [ ! -d "app" ]; then
+            echo "هشدار: پوشه app در کنار settings نیست! جستجوی app..."
+            find /home/runner/work -name "build.gradle.kts"
+          fi
+          
+          gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: neuropay-driver-debug-apk
-          path: "**/app/build/outputs/apk/debug/*.apk"
+          path: "**/build/outputs/apk/debug/*.apk"
