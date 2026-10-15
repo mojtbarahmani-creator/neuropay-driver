@@ -12,6 +12,315 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Recreate App Source Tree
+        run: |
+          mkdir -p app/src/main/java/ir/neuropay/driver
+          mkdir -p app/src/main/res/values
+
+          # 1. app/build.gradle.kts
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+
+          android {
+              namespace = "ir.neuropay.driver"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "ir.neuropay.driver"
+                  minSdk = 23
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0.0"
+              }
+
+              buildFeatures {
+                  compose = true
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+              implementation(composeBom)
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.activity:activity-compose:1.10.0")
+          }
+          EOF
+
+          # 2. AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="NeuroPay Driver"
+                  android:roundIcon="@android:drawable/sym_def_app_icon"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 3. MainActivity.kt (با منطق دریافت آفلاین و شبیه‌ساز)
+          cat << 'EOF' > app/src/main/java/ir/neuropay/driver/MainActivity.kt
+          package ir.neuropay.driver
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.animation.AnimatedVisibility
+          import androidx.compose.animation.fadeIn
+          import androidx.compose.animation.slideInVertically
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.Brush
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import java.text.NumberFormat
+          import java.util.Locale
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContent {
+                      DriverAppTheme {
+                          Surface(
+                              modifier = Modifier.fillMaxSize(),
+                              color = Color(0xFF0F172A)
+                          ) {
+                              DriverDashboardScreen()
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun DriverAppTheme(content: @Composable () -> Unit) {
+              MaterialTheme(
+                  colorScheme = darkColorScheme(
+                      background = Color(0xFF0F172A),
+                      surface = Color(0xFF1E293B),
+                      primary = Color(0xFF00E5FF),
+                      secondary = Color(0xFFFFB300)
+                  ),
+                  content = content
+              )
+          }
+
+          @Composable
+          fun DriverDashboardScreen() {
+              var balance by remember { mutableLongStateOf(420000L) }
+              var hasNewPayment by remember { mutableStateOf(false) }
+              var isListening by remember { mutableStateOf(true) }
+
+              val farsiFormatter = remember {
+                  NumberFormat.getInstance(Locale("fa", "IR"))
+              }
+
+              Column(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .padding(20.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.SpaceBetween
+              ) {
+                  // Header
+                  Row(
+                      modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      verticalAlignment = Alignment.CenterVertically
+                  ) {
+                      Column {
+                          Text(
+                              text = "نورو پی • تاکسی",
+                              fontSize = 22.sp,
+                              fontWeight = FontWeight.Bold,
+                              color = Color(0xFF00E5FF)
+                          )
+                          Text(
+                              text = "نسخه راننده (پرداخت آفلاین بدون اینترنت)",
+                              fontSize = 12.sp,
+                              color = Color(0xFF94A3B8)
+                          )
+                      }
+                      Box(
+                          modifier = Modifier
+                              .clip(RoundedCornerShape(20.dp))
+                              .background(Color(0xFF1E293B))
+                              .padding(horizontal = 12.dp, vertical = 6.dp)
+                      ) {
+                          Text(
+                              text = "کد راننده: ۵۲۴",
+                              color = Color(0xFFFFB300),
+                              fontWeight = FontWeight.Bold,
+                              fontSize = 13.sp
+                          )
+                      }
+                  }
+
+                  // Wallet Balance Card
+                  Card(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .padding(vertical = 16.dp),
+                      shape = RoundedCornerShape(24.dp),
+                      colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
+                  ) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .padding(24.dp),
+                          horizontalAlignment = Alignment.CenterHorizontally
+                      ) {
+                          Text(
+                              text = "موجودی کیف پول آفلاین",
+                              color = Color(0xFF94A3B8),
+                              fontSize = 14.sp
+                          )
+                          Spacer(modifier = Modifier.height(8.dp))
+                          Text(
+                              text = "${farsiFormatter.format(balance)} تومان",
+                              fontSize = 32.sp,
+                              fontWeight = FontWeight.ExtraBold,
+                              color = Color.White
+                          )
+                          Spacer(modifier = Modifier.height(16.dp))
+                          Row(verticalAlignment = Alignment.CenterVertically) {
+                              Box(
+                                  modifier = Modifier
+                                      .size(10.dp)
+                                      .clip(CircleShape)
+                                      .background(if (isListening) Color(0xFF10B981) else Color.Gray)
+                              )
+                              Spacer(modifier = Modifier.width(8.dp))
+                              Text(
+                                  text = if (isListening) "رادار آفلاین فعال (آماده دریافت کرایه)" else "رادار غیرفعال",
+                                  fontSize = 12.sp,
+                                  color = if (isListening) Color(0xFF10B981) else Color.Gray
+                              )
+                          }
+                      }
+                  }
+
+                  // Payment Simulation Card
+                  AnimatedVisibility(
+                      visible = hasNewPayment,
+                      enter = slideInVertically() + fadeIn()
+                  ) {
+                      Card(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .border(1.dp, Color(0xFF10B981), RoundedCornerShape(20.dp)),
+                          shape = RoundedCornerShape(20.dp),
+                          colors = CardDefaults.cardColors(containerColor = Color(0xFF064E3B))
+                      ) {
+                          Column(
+                              modifier = Modifier.padding(20.dp),
+                              horizontalAlignment = Alignment.CenterHorizontally
+                          ) {
+                              Text(
+                                  text = "پرداخت جدید دریافت شد!",
+                                  color = Color(0xFF34D399),
+                                  fontWeight = FontWeight.Bold,
+                                  fontSize = 18.sp
+                              )
+                              Spacer(modifier = Modifier.height(6.dp))
+                              Text(
+                                  text = "+ ۳۵,۰۰۰ تومان",
+                                  color = Color.White,
+                                  fontWeight = FontWeight.ExtraBold,
+                                  fontSize = 24.sp
+                              )
+                              Text(
+                                  text = "مسافر: صندلی جلو • شناسه تراکنش #NP-882",
+                                  color = Color(0xFFA7F3D0),
+                                  fontSize = 12.sp,
+                                  modifier = Modifier.padding(top = 4.dp)
+                              )
+                          }
+                      }
+                  }
+
+                  Spacer(modifier = Modifier.weight(1f))
+
+                  // Interactive Simulation Buttons
+                  Column(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalAlignment = Alignment.CenterHorizontally
+                  ) {
+                      Button(
+                          onClick = {
+                              if (!hasNewPayment) {
+                                  balance += 35000L
+                                  hasNewPayment = true
+                              }
+                          },
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .height(56.dp),
+                          shape = RoundedCornerShape(16.dp),
+                          colors = ButtonDefaults.buttonColors(
+                              containerColor = Color(0xFF00E5FF),
+                              contentColor = Color(0xFF0F172A)
+                          )
+                      ) {
+                          Text(
+                              text = "تست و شبیه‌سازی دریافت کرایه (۳۵,۰۰۰ تومان)",
+                              fontWeight = FontWeight.Bold,
+                              fontSize = 15.sp
+                          )
+                      }
+
+                      if (hasNewPayment) {
+                          Spacer(modifier = Modifier.height(10.dp))
+                          OutlinedButton(
+                              onClick = { hasNewPayment = false },
+                              modifier = Modifier.fillMaxWidth().height(48.dp),
+                              shape = RoundedCornerShape(14.dp)
+                          ) {
+                              Text("بستن پیام دریافت", color = Color(0xFF94A3B8))
+                          }
+                      }
+                  }
+                  Spacer(modifier = Modifier.height(16.dp))
+              }
+          }
+          EOF
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -24,35 +333,12 @@ jobs:
           gradle-version: '8.9'
           cache-disabled: true
 
-      - name: Find Project and Build
+      - name: Build Debug APK
         run: |
-          echo "=== ساختار فایل‌های شما در گیت‌هاب ==="
-          pwd
-          ls -la
-          find . -maxdepth 3 -not -path '*/.*'
-          
-          # پیدا کردن محل واقعی فایلی به نام settings.gradle.kts یا پوشه app
-          PROJECT_DIR=$(find . -name "settings.gradle.kts" -not -path "*/.*" -exec dirname {} \; | head -n 1)
-          
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "خطا: فایل settings.gradle.kts پیدا نشد!"
-            exit 1
-          fi
-          
-          echo "پروژه در این مسیر پیدا شد: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
-          
-          # اگر پوشه app داخل اینجا نبود، بررسی کن آیا app جای دیگریست
-          if [ ! -d "app" ]; then
-            echo "هشدار: پوشه app در کنار settings نیست! جستجوی app..."
-            find /home/runner/work -name "build.gradle.kts"
-          fi
-          
           gradle assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: neuropay-driver-debug-apk
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: app/build/outputs/apk/debug/*.apk
